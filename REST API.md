@@ -9,4 +9,4 @@ As of now, it is not pairing with the database nor syncing. We still need the da
 .
 # Request
 
-Missing request body, but execution still works proper. Manually adding in the ID, plate number, etc. for now.
+Missing request body, but execution still works proper. Manually adding in the ID, plate number, etc. for now. Can handle empty requests.
