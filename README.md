@@ -57,12 +57,9 @@ ACTIVE  ──(exit camera)──▶  EXITED  ──(payment)──▶  PAID
 
 | Component | Technology | Owner |
 |-----------|------------|-------|
-| Computer Vision & OCR | OpenCV + Tesseract | Kim Lay |
-| Backend / API | FastAPI (Python) | Jessy Quevedo |
-| Database | MySQL | Logan Henry |
-| Display / Client Integration | Raspberry Pi / Arduino (API client) | Bunlong Tan |
-| Analytics & QA | Daily reports, testing, edge cases | Inseong Hong |
-| Team Lead / PM | Schedule, task coordination, final review | Bumjun Ko |
+| Computer Vision & OCR | OpenCV + Tesseract | Kim Lay & Jessy Quevedo |
+| Database | MySQL + SQLAlchemy | Logan Henry & Inseong Hong |
+| Backend / API | FastAPI (Python) | Bumjun Ko & Bunlong Tan |
 
 ---
 
