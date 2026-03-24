@@ -57,7 +57,7 @@ ACTIVE  ──(exit camera)──▶  EXITED  ──(payment)──▶  PAID
 
 | Component | Technology | Owner |
 |-----------|------------|-------|
-| Computer Vision & OCR | OpenCV + Tesseract | Kim Lay & Jessy Quevedo |
+| Computer Vision & OCR | OpenCV + EasyOCR | Kim Lay & Jessy Quevedo |
 | Database | MySQL + SQLAlchemy | Logan Henry & Inseong Hong |
 | Backend / API | FastAPI (Python) | Bumjun Ko & Bunlong Tan |
 
