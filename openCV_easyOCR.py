@@ -14,7 +14,7 @@ license_plate_detector = YOLO('best.pt')
 
 #cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 #cap = cv2.VideoCapture('video.mp4')
-img = cv2.imread("georgia.jpg")
+img = cv2.imread("car frames/georgia1.jpg")
 
 
 
@@ -41,9 +41,10 @@ states_set = {
 
 #---------- Locate Plate Functions ----------
 
+#Store best license plates
 final_results = {}
 
-# Gives coordinates and index of license plate
+#Gives coordinates and index of license plate
 def plate_location(results):
     best_box = None
     best_conf = -1
@@ -51,7 +52,7 @@ def plate_location(results):
 
     # Extract detection information
     for i, result in enumerate(results):
-        for box in result.boxes:
+        for b, box in enumerate(result.boxes):
 
             # Get class name
             class_name = result.names[int(box.cls[0].item())]
@@ -62,10 +63,10 @@ def plate_location(results):
                 if conf > best_conf:  # keep the most confident
                     best_conf = conf
                     best_box = box.xyxy[0].tolist()  # store coordinates
-                    index = i
+                    index = [i, b]
     return best_box, index
 
-# Crops License plate with coordinates
+#Crops License plate with coordinates
 def crop_plate(coord, image, zoom=2):
 
     #Extarct coordinates
@@ -81,6 +82,7 @@ def crop_plate(coord, image, zoom=2):
                                   interpolation=cv2.INTER_CUBIC)
     return plate_img_zoomed, [x1, y1, x2, y2]
 
+#Extracts text from license plate with EasyOCR
 def read_license_plate(license_plate):
     best_text = None
     best_score = -1
@@ -96,17 +98,17 @@ def read_license_plate(license_plate):
         text = re.sub(r'[^A-Z0-9]', '', text.upper())
 
         #Ensure text is license plate numbers
-        if score > best_score and 4 <= len(text) <= 10 and text not in states_set:  # keep the most confident
+        if score > best_score and 4 <= len(text) <= 10 and not any(state in text for state in states_set):
             best_score = score
             best_text = text
 
     #Returns plate number that was found
     if best_text is not None:
-        return best_text, best_score
+        return best_text, int(best_score * 100)
     else:
         return None, None
 
-# Start license plate extraction
+#Start license plate extraction
 def extract_plate_text():
 
     #Read frames from video input
@@ -134,7 +136,7 @@ def extract_plate_text():
 
                 # Process license plate
                 license_plate_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
-                _, plate_thresh = cv2.threshold(license_plate_gray, 100, 255, cv2.THRESH_BINARY_INV)
+                _, plate_thresh = cv2.threshold(license_plate_gray, 125, 255, cv2.THRESH_BINARY_INV)
 
                 # Read license plate number
                 license_plate_text, text_conf_score = read_license_plate(plate_thresh)
@@ -159,12 +161,13 @@ def extract_plate_text():
                 plt.axis('off')
                 plt.show()
 
+                # Display Plate Detected
+                detections[index[0]][index[1]].show()
+                detections[index[0]].show()
+
             ret = False
 
     print(final_results)
-
-    # Display Plate Detected
-    detections[index][index].show()
 
     # Save results
     #detections[index].save('output.jpg')
@@ -175,7 +178,7 @@ def extract_plate_text():
 
 
 
-#----- MAIN FOR TESTING -------
+#-------------------- MAIN FOR TESTING --------------------
 def main():
 
     # Extract detection information
