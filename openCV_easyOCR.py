@@ -5,7 +5,7 @@ from ultralytics import YOLO
 #---------- load models ----------
 
 #Detect license plates and cars
-#https://huggingface.co/orionwambert/yolov8-license-plate-detection?utm_source=chatgpt.com
+#https://huggingface.co/orionwambert/yolov8-license-plate-detection
 license_plate_detector = YOLO('best.pt')
 
 
