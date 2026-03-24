@@ -26,7 +26,7 @@ Build an **API-first** smart parking system using license plate recognition to:
 ## System Architecture
 
 ```
-Camera  →  OpenCV  →  Tesseract OCR  →  Plate String
+Camera   →   OpenCV   →   EasyOCR   →   Plate String
                                              │
                                        POST /api/entry
                                        POST /api/exit
