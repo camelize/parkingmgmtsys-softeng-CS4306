@@ -134,7 +134,7 @@ def extract_plate_text():
                 # Crop License Plate
                 license_plate_crop, plates_xy = crop_plate(plate_position, frame)
 
-                # Process license plate
+                # Pre-process license plate
                 license_plate_gray = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
                 _, plate_thresh = cv2.threshold(license_plate_gray, 125, 255, cv2.THRESH_BINARY_INV)
 
@@ -163,7 +163,7 @@ def extract_plate_text():
 
                 # Display Plate Detected
                 detections[index[0]][index[1]].show()
-                detections[index[0]].show()
+                #detections[index[0]].show()
 
             ret = False
 
