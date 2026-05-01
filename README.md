@@ -31,14 +31,14 @@ Camera   ->   OpenCV / OCR   ->   Plate String
                                       |
                                 FastAPI Backend
                                       |
-                            REST_API.py demo endpoints
+                             REST_API.py API endpoints
                                       |
                           database.py SQLAlchemy models
                                       |
                               SQLite / MySQL
                                       |
-                              Display Clients
-                           (Raspberry Pi / Arduino)
+                             Terminal Clients
+                         (curl / Swagger UI / future web UI)
 ```
 
 ### System Flow
@@ -48,7 +48,7 @@ Camera   ->   OpenCV / OCR   ->   Plate String
 | Entry | Capture plate at entry gate | Log vehicle + timestamp, check capacity, open gate, spots -1 |
 | API + DB | Route requests and persist data | Track active visits, spot occupancy, and detection history |
 | Exit | Capture plate at exit gate | Compute duration & fee, update visit, open gate, spots +1 |
-| Payment | Confirm manual payment | Mark completed session as paid in the API demo flow |
+| Payment | Confirm manual payment | Mark completed session as paid and store payment details |
 
 ### Session State Machine
 
@@ -77,7 +77,7 @@ ACTIVE  --(exit camera)-->  EXITED  --(payment)-->  PAID
 | `README.md` | Project overview and setup guide |
 | `REST_API.py` | FastAPI demo backend for entry, exit, payment, sessions, events, and analytics |
 | `REST API.md` | Detailed endpoint documentation with request/response examples |
-| `database.py` | SQLAlchemy models and MySQL connection setup |
+| `database.py` | SQLAlchemy models and SQLite/MySQL connection setup |
 | `.env.example` | Example database connection string |
 | `requirements.txt` | Python dependency list |
 | `.gitignore` | Ignores local `.env`, Python cache files, compiled bytecode, and local SQLite DB |
@@ -119,13 +119,34 @@ uvicorn REST_API:app --reload
 - Swagger UI: http://127.0.0.1:8000/docs
 - ReDoc: http://127.0.0.1:8000/redoc
 
-### 4. Run the Database Model App
+### 4. Optional: Run the Database Model App
 
 ```bash
-uvicorn database:app --reload
+uvicorn database:app --reload --port 8001
 ```
 
 This standalone app initializes the same SQLAlchemy tables and reports which database URL is configured.
+
+---
+
+## Current Client Plan
+
+The current implementation is designed to be tested from the terminal and FastAPI's browser-based Swagger UI.
+
+| Client Type | Status | Usage |
+|-------------|--------|-------|
+| Terminal / curl | Current target | Send entry, exit, payment, and query requests directly to the REST API |
+| Swagger UI | Current target | Manually test endpoints at `http://127.0.0.1:8000/docs` |
+| Web UI | Future option | Build later if time allows |
+| Raspberry Pi / Arduino display | Not currently planned | Removed from the active implementation scope |
+
+### Example Terminal Test
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/entry \
+  -H "Content-Type: application/json" \
+  -d '{"license_plate":"ABC1234","confidence":0.92,"camera_source":"entry"}'
+```
 
 ---
 
@@ -181,10 +202,13 @@ See [`REST API.md`](REST%20API.md) for full endpoint documentation.
 | Scenario | Handling |
 |----------|----------|
 | Low OCR confidence (< 0.6) | Reject and request re-capture |
+| Wrong camera source | Reject with 400 |
 | Parking lot full | Reject entry with 409 |
 | Duplicate entry (plate already parked) | Reject with 409 |
 | Exit without active session | Reject with 404 |
+| Payment before exit | Reject with 400 |
 | Insufficient payment | Reject with 400 |
+| Double payment | Reject with 400 |
 
 All OCR events, including accepted and rejected detections, are logged in the database for auditing.
 
