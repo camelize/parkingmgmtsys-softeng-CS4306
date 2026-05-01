@@ -1,19 +1,24 @@
-# Smart Parking Management System — REST API
+# Smart Parking Management System REST API
 
-> **Framework:** FastAPI  ·  **Database:** MySQL (pending integration)  ·  **Architecture:** API-first
+> **Framework:** FastAPI · **Persistence:** SQLAlchemy models in `database.py` · **Default local DB:** SQLite · **Configured DB:** MySQL via `DATABASE_URL`
 
-The backend is independent of display hardware; Raspberry Pi / Arduino will act as API clients for the demo.
+The backend is independent of display hardware. Raspberry Pi, Arduino, or OCR camera clients can call the API over HTTP.
 
 ---
 
 ## Quick Start
 
 ```bash
-pip install fastapi uvicorn pydantic
+pip install -r requirements.txt
 uvicorn REST_API:app --reload
 ```
 
-Interactive docs available at `http://127.0.0.1:8000/docs` (Swagger UI).
+Interactive docs are available at:
+
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- ReDoc: `http://127.0.0.1:8000/redoc`
+
+If no `.env` file is present, the API uses a local SQLite file named `parking_demo.db`. To use MySQL, copy `.env.example` to `.env` and update `DATABASE_URL`.
 
 ---
 
@@ -23,31 +28,44 @@ Interactive docs available at `http://127.0.0.1:8000/docs` (Swagger UI).
 |--------|------|-------------|
 | `GET` | `/` | Health check & system time |
 | `GET` | `/api/spots` | Real-time parking availability |
-| `POST` | `/api/entry` | Record vehicle entry (from entry camera) |
-| `POST` | `/api/exit` | Record vehicle exit & compute fee (from exit camera) |
-| `POST` | `/api/payment/{session_id}` | Confirm manual payment → PAID |
+| `POST` | `/api/entry` | Record vehicle entry from the entry camera |
+| `POST` | `/api/exit` | Record vehicle exit and compute fee |
+| `POST` | `/api/payment/{session_id}` | Confirm manual payment and mark session PAID |
 | `GET` | `/api/sessions/active` | List all currently parked vehicles |
-| `GET` | `/api/sessions/{session_id}` | Look up a single session |
+| `GET` | `/api/sessions/{session_id}` | Look up one parking session |
 | `GET` | `/api/events` | OCR plate-detection event log |
 | `GET` | `/api/analytics/daily` | Daily revenue, peak hour, repeat vehicles |
 
+`session_id` maps to `vehicle_visits.visit_id` in the database.
+
 ---
 
-## Session State Machine
+## Data Model
 
-```
-ACTIVE  ──(exit camera)──▶  EXITED  ──(payment)──▶  PAID
+`REST_API.py` now uses the SQLAlchemy models from `database.py`.
+
+| Table | Purpose |
+|-------|---------|
+| `parking_spots` | Spot occupancy state and currently parked plate |
+| `vehicle_visits` | Entry/exit/payment lifecycle for each vehicle visit |
+| `detection_logs` | OCR scan audit log for accepted and rejected reads |
+
+### Session State Machine
+
+```text
+ACTIVE --(exit camera)--> EXITED --(payment)--> PAID
 ```
 
-- **ACTIVE** — Vehicle is currently parked.
-- **EXITED** — Vehicle has left; duration & fee calculated, awaiting payment.
-- **PAID** — Payment received; session closed.
+- **ACTIVE**: Vehicle is currently parked.
+- **EXITED**: Vehicle has left; duration and fee have been calculated.
+- **PAID**: Manual payment has been recorded.
 
 ---
 
 ## Entry Flow (`POST /api/entry`)
 
 **Request body:**
+
 ```json
 {
   "license_plate": "ABC1234",
@@ -57,17 +75,22 @@ ACTIVE  ──(exit camera)──▶  EXITED  ──(payment)──▶  PAID
 ```
 
 **What happens:**
-1. Reject if OCR confidence < 0.6
-2. Reject if lot is full (capacity check)
-3. Reject if plate already has an ACTIVE session (duplicate entry)
-4. Create session (ACTIVE), decrement available spots
-5. Log plate event for auditing
+
+1. Normalize the plate string to uppercase.
+2. Reject if `camera_source` is not `entry`.
+3. Reject if OCR confidence is below `0.6`.
+4. Reject if the same plate already has an ACTIVE visit.
+5. Find the first open parking spot.
+6. Create a `vehicle_visits` row with status `ACTIVE`.
+7. Mark the assigned `parking_spots` row occupied.
+8. Add a `detection_logs` row.
 
 ---
 
 ## Exit Flow (`POST /api/exit`)
 
 **Request body:**
+
 ```json
 {
   "license_plate": "ABC1234",
@@ -77,64 +100,73 @@ ACTIVE  ──(exit camera)──▶  EXITED  ──(payment)──▶  PAID
 ```
 
 **What happens:**
-1. Reject if OCR confidence < 0.6
-2. Reject if no ACTIVE session for this plate
-3. Calculate duration & fee (minimum 30-min charge, $2.50/hr)
-4. Update session to EXITED, increment available spots
-5. Log plate event for auditing
+
+1. Normalize the plate string to uppercase.
+2. Reject if `camera_source` is not `exit`.
+3. Reject if OCR confidence is below `0.6`.
+4. Reject if there is no ACTIVE visit for the plate.
+5. Calculate duration and fee.
+6. Update the `vehicle_visits` row to `EXITED`.
+7. Mark the related `parking_spots` row open.
+8. Add a `detection_logs` row.
+
+Fee calculation uses `$2.50/hour` with a minimum 30-minute charge.
 
 ---
 
 ## Payment (`POST /api/payment/{session_id}`)
 
 **Request body:**
+
 ```json
 {
   "amount": 5.00
 }
 ```
 
-Transitions session from EXITED → PAID. Rejects if insufficient amount, already paid, or vehicle hasn't exited yet.
+Transitions the session from `EXITED` to `PAID`.
+
+Rejects when:
+
+| Scenario | API Response |
+|----------|--------------|
+| Session does not exist | `404` |
+| Vehicle has not exited | `400` |
+| Session is already paid | `400` |
+| Payment amount is below fee | `400` |
 
 ---
 
-## Edge Cases Handled (Reliability)
+## Edge Cases Handled
 
 | Scenario | API Response |
-|----------|-------------|
-| Low OCR confidence (< 0.6) | `400` — plate unreadable |
-| Parking lot full | `409` — no available spots |
-| Duplicate entry (plate already ACTIVE) | `409` — session already exists |
-| Exit without active session | `404` — no active session found |
-| Insufficient payment | `400` — amount too low |
-| Double payment | `400` — already paid |
+|----------|--------------|
+| Low OCR confidence | `400` |
+| Wrong camera source for endpoint | `400` |
+| Parking lot full | `409` |
+| Duplicate active entry | `409` |
+| Exit without active session | `404` |
+| Insufficient payment | `400` |
+| Double payment | `400` |
 
-All OCR events (accepted and rejected) are logged in the plate events store for debugging and auditing.
+All accepted and rejected OCR scans are stored in `detection_logs`.
 
 ---
 
 ## Analytics (`GET /api/analytics/daily`)
 
-Returns daily report including:
-- **Total revenue** for today
-- **Vehicles served** count
-- **Currently parked** count
-- **Peak hour** (busiest entry hour)
-- **Repeat vehicles** (plates that entered more than once)
+Returns:
+
+- Total paid revenue for today
+- Vehicles served today
+- Currently parked count
+- Peak entry hour
+- Repeat vehicle plates
 
 ---
 
-## Database Sync Status
+## Notes
 
-Currently using **in-memory stores** (Python dicts/lists). The Database team (Logan) will integrate MySQL tables:
-
-- `parking_sessions` — entry/exit records, duration, fee, status
-- `plate_events` — every OCR detection event with confidence, camera source, accept/reject reason
-
-All `FIXME` comments in the code mark integration points.
-
----
-
-## Sources
-
-FastAPI documentation, Pydantic docs, team collaboration.
+- `parking_spots` are seeded automatically on application startup.
+- Without `.env`, the app uses `sqlite:///./parking_demo.db` for local testing.
+- With `.env`, the app uses the configured `DATABASE_URL`, such as MySQL through PyMySQL.
