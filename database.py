@@ -1,9 +1,9 @@
 # Demian
 from datetime import datetime
 from enum import Enum as PyEnum
+import os
 
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
+from dotenv import load_dotenv
 from sqlalchemy import (
     create_engine,
     String,
@@ -14,10 +14,13 @@ from sqlalchemy import (
     ForeignKey,
     Enum,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, Session, relationship
-
-import os
-from dotenv import load_dotenv
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    sessionmaker,
+    relationship,
+)
 
 load_dotenv()
 
@@ -27,7 +30,12 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL is missing. Check your .env file.")
 
 engine = create_engine(DATABASE_URL, echo=True, future=True)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+)
 
 
 class Base(DeclarativeBase):
@@ -37,6 +45,7 @@ class Base(DeclarativeBase):
 class VisitStatus(PyEnum):
     PARKED = "parked"
     EXITED = "exited"
+    PAID = "paid"
 
 
 class DetectionEvent(PyEnum):
@@ -52,7 +61,10 @@ class ParkingSpot(Base):
     is_occupied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     current_plate: Mapped[str | None] = mapped_column(String(20), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False,
     )
 
     visits: Mapped[list["VehicleVisit"]] = relationship(back_populates="spot")
@@ -67,7 +79,11 @@ class VehicleVisit(Base):
     spot_id: Mapped[int] = mapped_column(ForeignKey("parking_spots.spot_id"), nullable=False)
     entry_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     exit_time: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    status: Mapped[VisitStatus] = mapped_column(Enum(VisitStatus), default=VisitStatus.PARKED, nullable=False)
+    status: Mapped[VisitStatus] = mapped_column(
+        Enum(VisitStatus),
+        default=VisitStatus.PARKED,
+        nullable=False,
+    )
     duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fee: Mapped[float | None] = mapped_column(Float, nullable=True)
 
@@ -87,17 +103,8 @@ class DetectionLog(Base):
     spot: Mapped["ParkingSpot"] = relationship(back_populates="detections")
 
 
-Base.metadata.create_all(engine)
-
-
-app = FastAPI()
-
-
-class ParkingDetection(BaseModel):
-    spot_id: int
-    license_plate: str
-    confidence: float
-    event_type: str  # entry_scan, exit_scan, rescan
+def init_db():
+    Base.metadata.create_all(bind=engine)
 
 
 def get_db():
