@@ -1,4 +1,4 @@
-// Demian
+# Demian
 from datetime import datetime
 from enum import Enum as PyEnum
 
